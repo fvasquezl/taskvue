@@ -1,5 +1,10 @@
 var path = require('path')
 var webpack = require('webpack')
+var ExtractTextPlugin = require("extract-text-webpack-plugin")
+var glob = require('glob')
+var PurifyCSSPlugin = require('purifycss-webpack')
+
+var inProduction = process.env.NODE_ENV === 'production'
 
 module.exports = {
   entry: './src/main.js',
@@ -38,20 +43,15 @@ module.exports = {
         loader: 'vue-loader',
         options: {
           loaders: {
-            // Since sass-loader (weirdly) has SCSS as its default parse mode, we map
-            // the "scss" and "sass" values for the lang attribute to the right configs here.
-            // other preprocessors should work out of the box, no loader config like this necessary.
-            'scss': [
-              'vue-style-loader',
-              'css-loader',
-              'sass-loader'
-            ],
-            'sass': [
-              'vue-style-loader',
-              'css-loader',
-              'sass-loader?indentedSyntax'
-            ]
-          }
+              'scss': ExtractTextPlugin.extract({
+                  use: 'css-loader!sass-loader',
+                  fallback: 'vue-style-loader' // <- this is a dep of vue-loader, so no need to explicitly install if using npm3
+              }),
+          },
+            cssModules:{
+                localIdentName: '_module[hash:base64]',
+                camelCase:true
+            }
           // other vue-loader options go here
         }
       },
@@ -61,7 +61,7 @@ module.exports = {
         exclude: /node_modules/
       },
       {
-        test: /\.(png|jpg|gif|svg)$/,
+        test: /\.(png|jpg|gif|svg|eot|ttf|woff2?)$/,
         loader: 'file-loader',
         options: {
           name: '[name].[ext]?[hash]'
@@ -69,9 +69,22 @@ module.exports = {
       }
     ]
   },
+    plugins: [
+        new ExtractTextPlugin("style.css"),
+        // Make sure this is after ExtractTextPlugin!
+        new PurifyCSSPlugin({
+            // Give paths to parse for rules. These should be absolute!
+            paths: glob.sync(path.join(__dirname, 'src/**/*.vue')),
+            purifyOptions:{
+              minify: inProduction,
+                whitelist:['*_module_*']
+            }
+        })
+    ],
   resolve: {
+    modules:[path.resolve(__dirname, 'src'), 'node_modules'],
     alias: {
-      'vue$': 'vue/dist/vue.esm.js'
+      'vue$': 'vue/dist/vue.esm.js',
     },
     extensions: ['*', '.js', '.vue', '.json']
   },
@@ -86,7 +99,7 @@ module.exports = {
   devtool: '#eval-source-map'
 }
 
-if (process.env.NODE_ENV === 'production') {
+if (inProduction) {
   module.exports.devtool = '#source-map'
   // http://vue-loader.vuejs.org/en/workflow/production.html
   module.exports.plugins = (module.exports.plugins || []).concat([
